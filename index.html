@@ -50,12 +50,23 @@
     let rawDatabase = [];
     let chartInstance = null;
 
-    async function loadDatabase() {
+        async function loadDatabase() {
       try {
         const res = await fetch('saved_posts.json?nocache=' + Date.now());
         const data = await res.json();
         
-        // Auto-extract array lines from Instagram's root file wrapper object if necessary
+        // THIS TEST CODE WILL SHOW WHAT IS INSIDE YOUR FILE
+        alert("Root Keys Found: " + Object.keys(data).join(", "));
+        if (typeof data === 'object') {
+          const firstKey = Object.keys(data)[0];
+          if (Array.isArray(data[firstKey])) {
+            alert("First item keys: " + Object.keys(data[firstKey][0] || {}).join(", "));
+            alert("Sample Item: " + JSON.stringify(data[firstKey][0]));
+          } else if (Array.isArray(data)) {
+            alert("First array item keys: " + Object.keys(data[0] || {}).join(", "));
+          }
+        }
+
         if (!Array.isArray(data) && typeof data === 'object') {
           const rootKeys = Object.keys(data);
           rawDatabase = data[rootKeys[0]] || [];
@@ -68,7 +79,8 @@
       } catch (err) {
         console.error("Database reading error:", err);
       }
-    }
+        }
+    
 
     // Helper to safely extract URL, Timestamp, and Tags from ANY file structure variant
     function extractItemData(item) {
