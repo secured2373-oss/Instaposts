@@ -53,8 +53,16 @@
     async function loadDatabase() {
       try {
         const res = await fetch('saved_posts.json?nocache=' + Date.now());
-      
-        rawDatabase = await res.json();
+        const data = await res.json();
+        
+        // Auto-extract array lines from Instagram's root file wrapper object if necessary
+        if (!Array.isArray(data) && typeof data === 'object') {
+          const rootKeys = Object.keys(data);
+          rawDatabase = data[rootKeys[0]] || [];
+        } else {
+          rawDatabase = data || [];
+        }
+        
         setupFiltersAndAnalytics();
         renderFeed();
       } catch (err) {
@@ -62,23 +70,50 @@
       }
     }
 
-    function parseTags(tagString) {
-      if (!tagString || !tagString.includes(' | ')) {
-        return { topic: 'General', details: 'None', summary: tagString || 'No data.' };
+    // Helper to safely extract URL, Timestamp, and Tags from ANY file structure variant
+    function extractItemData(item) {
+      let url = item.url || item.uri || "";
+      let date = item.date || item.string_date_time || "Unknown Date";
+      let rawTags = item.tags || item.AI_Semantic_Tags || "";
+
+      // Look into Meta's deeply nested map configurations if keys are missing
+      const mediaData = item.string_map_data || item.media_list_data || {};
+      
+      if (!url) {
+        url = mediaData.Link?.value || mediaData.href?.value || "";
       }
-      const parts = {};
-      tagString.split(' | ').forEach(item => {
-        const [key, val] = item.split(': ');
-        if (key && val) parts[key.trim().toLowerCase()] = val.trim();
-      });
-      return { topic: parts.topic || 'General', details: parts.details || 'None', summary: parts.summary || 'No data.' };
+      if (date === "Unknown Date") {
+        date = mediaData.Time?.value || "Unknown Date";
+      }
+
+      // If the post has not gone through the AI pipeline yet, handle fallback tags
+      let parsed = { topic: 'Uncategorized', details: 'None', summary: 'Click Sync New Post above to generate smart tags.' };
+      
+      if (rawTags && rawTags.includes(' | ')) {
+        const parts = {};
+        rawTags.split(' | ').forEach(pt => {
+          const [key, val] = pt.split(': ');
+          if (key && val) parts[key.trim().toLowerCase()] = val.trim();
+        });
+        parsed = { 
+          topic: parts.topic || 'General', 
+          details: parts.details || 'None', 
+          summary: parts.summary || 'Processed successfully.' 
+        };
+      } else if (item.title) {
+        // Fallback search term string from raw files
+        parsed.summary = item.title;
+      }
+
+      return { url, date, ...parsed, rawString: (url + " " + date + " " + parsed.topic + " " + parsed.details + " " + parsed.summary).toLowerCase() };
     }
 
     function setupFiltersAndAnalytics() {
       document.getElementById('totalCount').innerText = `Total Saved Items: ${rawDatabase.length}`;
       const counts = {};
+      
       rawDatabase.forEach(item => {
-        const info = parseTags(item.tags);
+        const info = extractItemData(item);
         counts[info.topic] = (counts[info.topic] || 0) + 1;
       });
 
@@ -106,24 +141,32 @@
       const container = document.getElementById('feedContainer');
       container.innerHTML = '';
 
+      // Reverse list to show newest items first
       const itemsToRender = [...rawDatabase].reverse();
+      let matchesCount = 0;
+
       itemsToRender.forEach(item => {
-        const info = parseTags(item.tags);
-        const matchesSearch = item.url.toLowerCase().includes(query) || item.tags.toLowerCase().includes(query);
+        const info = extractItemData(item);
+        const matchesSearch = info.rawString.includes(query);
         const matchesFilter = filter === 'All' || info.topic === filter;
 
         if (matchesSearch && matchesFilter) {
+          matchesCount++;
           container.innerHTML += `
             <div class="card">
               <span class="badge">${info.topic}</span>
-              <p class="meta-item"><strong>📅 Date Logged:</strong> ${item.date}</p>
+              <p class="meta-item"><strong>📅 Date Logged:</strong> ${info.date}</p>
               <p class="meta-item"><strong>📦 Extracted Elements:</strong> <em>${info.details}</em></p>
               <p class="meta-item"><strong>📝 AI Summary:</strong> ${info.summary}</p>
               <hr>
-              <button onclick="window.open('${item.url}', '_blank')">Open Original Link ↗️</button>
+              <button onclick="window.open('${info.url}', '_blank')">Open Original Link ↗️</button>
             </div>`;
         }
       });
+      
+      if (matchesCount === 0) {
+        container.innerHTML = '<div class="card" style="text-align:center;color:gray;">No matching item cards found.</div>';
+      }
     }
 
     async function syncLink() {
