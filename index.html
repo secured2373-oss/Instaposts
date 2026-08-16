@@ -22,9 +22,8 @@
 </head>
 <body>
   <div class="container">
-    <h1>🔍 InstaSave AI Search Vault</h1>
+    <h1>🔍 InstaSave AI Netlify Search Vault</h1>
     
-    <!-- Sync New Link Section -->
     <div class="card">
       <h3>📥 Sync New Instagram Post</h3>
       <input type="text" id="newUrl" placeholder="Paste instagram.com URL here...">
@@ -32,21 +31,18 @@
       <div id="syncStatus" style="margin-top:10px; font-size:13px;"></div>
     </div>
 
-    <!-- Analytics Section -->
     <div class="card">
       <h3>📊 Your Collection Insights</h3>
       <p id="totalCount" style="font-size: 15px; font-weight: bold; margin: 5px 0;">Total Saved: Loading...</p>
       <div class="chart-container"><canvas id="analyticsChart"></canvas></div>
     </div>
 
-    <!-- Controls Section -->
     <div class="card">
       <h3>🎛️ Search & Refine Options</h3>
       <input type="text" id="searchBox" oninput="renderFeed()" placeholder="Type to search captions, topics, ingredients...">
       <select id="categoryFilter" onchange="renderFeed()"><option value="All">All Categories</option></select>
     </div>
 
-    <!-- Feed Results Container -->
     <div id="feedContainer"></div>
   </div>
 
@@ -54,7 +50,6 @@
     let rawDatabase = [];
     let chartInstance = null;
 
-    // Automatically load your data file on startup
     async function loadDatabase() {
       try {
         const res = await fetch('my_instagram_links_vault.json?nocache=' + Date.now());
@@ -62,7 +57,7 @@
         setupFiltersAndAnalytics();
         renderFeed();
       } catch (err) {
-        console.error("Failed to load database file structure:", err);
+        console.error("Database reading error:", err);
       }
     }
 
@@ -80,21 +75,18 @@
 
     function setupFiltersAndAnalytics() {
       document.getElementById('totalCount').innerText = `Total Saved Items: ${rawDatabase.length}`;
-      
       const counts = {};
       rawDatabase.forEach(item => {
         const info = parseTags(item.tags);
         counts[info.topic] = (counts[info.topic] || 0) + 1;
       });
 
-      // Update Filter Dropdown
       const dropdown = document.getElementById('categoryFilter');
       dropdown.innerHTML = '<option value="All">All Categories</option>';
       Object.keys(counts).sort().forEach(cat => {
         dropdown.innerHTML += `<option value="${cat}">${cat}</option>`;
       });
 
-      // Draw Chart.js Bar Chart
       const ctx = document.getElementById('analyticsChart').getContext('2d');
       if (chartInstance) chartInstance.destroy();
       chartInstance = new Chart(ctx, {
@@ -113,9 +105,7 @@
       const container = document.getElementById('feedContainer');
       container.innerHTML = '';
 
-      // Reverse list to show newest items first
       const itemsToRender = [...rawDatabase].reverse();
-
       itemsToRender.forEach(item => {
         const info = parseTags(item.tags);
         const matchesSearch = item.url.toLowerCase().includes(query) || item.tags.toLowerCase().includes(query);
@@ -142,15 +132,14 @@
       const targetUrl = urlInput.value.trim();
 
       if (!targetUrl.includes('instagram.com')) {
-        status.innerHTML = '<span style="color:red">❌ Invalid Instagram address link.</span>';
+        status.innerHTML = '<span style="color:red">❌ Invalid address link.</span>';
         return;
       }
 
       btn.disabled = true;
-      status.innerText = '🤖 Processing link via Gemini serverless function...';
+      status.innerText = '🤖 Processing link via Netlify functions...';
 
       try {
-        // Calls the background Node.js api function inside your app layout
         const response = await fetch('/api/sync', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -159,7 +148,7 @@
         const result = await response.json();
 
         if (result.success) {
-          status.innerHTML = '<span style="color:green">🎉 Saved! Reloading app database...</span>';
+          status.innerHTML = '<span style="color:green">🎉 Saved! Reloading engine...</span>';
           urlInput.value = '';
           setTimeout(() => { location.reload(); }, 1500);
         } else {
@@ -176,4 +165,3 @@
   </script>
 </body>
 </html>
-
