@@ -24,7 +24,6 @@
   <div class="container">
     <h1>🔍 InstaSave AI Netlify Search Vault</h1>
     
-    <!-- Sync New Link Section -->
     <div class="card">
       <h3>📥 Sync New Instagram Post</h3>
       <input type="text" id="newUrl" placeholder="Paste instagram.com URL here...">
@@ -32,21 +31,18 @@
       <div id="syncStatus" style="margin-top:10px; font-size:13px;"></div>
     </div>
 
-    <!-- Analytics Metrics Container -->
     <div class="card">
       <h3>📊 Your Collection Insights</h3>
       <p id="totalCount" style="font-size: 15px; font-weight: bold; margin: 5px 0;">Total Saved: Loading...</p>
       <div class="chart-container"><canvas id="analyticsChart"></canvas></div>
     </div>
 
-    <!-- Controls Filter Options Container -->
     <div class="card">
       <h3>🎛️ Search & Refine Options</h3>
       <input type="text" id="searchBox" oninput="renderFeed()" placeholder="Type to search captions, topics, ingredients...">
       <select id="categoryFilter" onchange="renderFeed()"><option value="All">All Categories</option></select>
     </div>
 
-    <!-- Output Stream Feed -->
     <div id="feedContainer"></div>
   </div>
 
@@ -59,41 +55,38 @@
         const res = await fetch('saved_posts.json?nocache=' + Date.now());
         const data = await res.json();
         
-        // STAGE 1: Safely unpack the inner array list no matter how Meta wrapped it
+        // Fail-safe logic to unpack objects or flat list variants seamlessly
         if (Array.isArray(data)) {
           rawDatabase = data;
         } else if (typeof data === 'object' && data !== null) {
           const keys = Object.keys(data);
-          // Look for an item that holds an array (like saved_saved_media)
-          const nestedArrayKey = keys.find(k => Array.isArray(data[k]));
-          if (nestedArrayKey) {
-            rawDatabase = data[nestedArrayKey];
-          } else {
-            // Fallback: Use raw object items list directly
-            rawDatabase = Object.values(data);
+          // Look for an item that holds the list array (e.g. saved_saved_media)
+          const nestedKey = keys.find(k => Array.isArray(data[k]));
+          rawDatabase = nestedKey ? data[nestedKey] : Object.values(data);
+          
+          // Flatten array elements one level deep if Instagram bundled a secondary nested list array
+          if (rawDatabase.length > 0 && Array.isArray(rawDatabase[0])) {
+            rawDatabase = rawDatabase.flat();
           }
-        } else {
-          rawDatabase = [];
         }
-        
-        // Force basic filtering to remove invalid objects before proceeding
-        rawDatabase = rawDatabase.filter(item => item && (item.timestamp || item.fid || item.media));
+
+        // Clean null properties out of the payload mix before processing
+        rawDatabase = rawDatabase.filter(item => item && typeof item === 'object');
 
         setupFiltersAndAnalytics();
         renderFeed();
       } catch (err) {
-        console.error("Critical loading log breakdown tracker:", err);
-        document.getElementById('totalCount').innerText = "❌ Error processing data array payload.";
+        console.error("Critical dashboard initialization error:", err);
+        document.getElementById('totalCount').innerText = "❌ Structure Parsing Error: Check JSON layout configuration.";
       }
     }
 
-    // STAGE 2: Deep variable extractor mapped around timestamp, media, fid structures
     function extractItemData(item) {
       let url = "";
       let date = "Unknown Date";
       let rawTags = item.tags || item.AI_Semantic_Tags || "";
 
-      // Check timestamp field safely
+      // 1. Unpack Date securely
       if (item.timestamp) {
         if (!isNaN(item.timestamp)) {
           date = new Date(Number(item.timestamp) * 1000).toLocaleDateString();
@@ -102,20 +95,22 @@
         }
       }
 
-      // Reconstruct direct interactive URL strings using your unique 'fid' tags
+      // 2. Reconstruct functional links directly using your unique 'fid' keys
       if (item.fid) {
         url = `https://instagram.com{item.fid}/`;
       } else if (item.media && typeof item.media === 'object') {
-        const deepId = item.media.id || item.media.fid || item.media.uri;
-        url = (deepId && !deepId.startsWith('http')) ? `https://instagram.com{deepId}/` : (deepId || "");
+        const targetId = item.media.id || item.media.fid;
+        url = targetId ? `https://instagram.com{targetId}/` : (item.media.uri || item.media.url || "");
       } else if (typeof item.media === 'string') {
         url = item.media;
       }
 
-      if (!url) url = "https://instagram.com";
+      if (!url || !url.startsWith('http')) {
+        url = item.url || item.uri || "https://instagram.com";
+      }
 
-      // Process artificial intelligence parsing tags safely
-      let parsed = { topic: 'Uncategorized', details: 'None', summary: 'Click Sync New Post above to generate smart semantic labels.' };
+      // 3. Fallback tracking descriptive logs 
+      let parsed = { topic: 'Uncategorized', details: 'None', summary: 'Click Sync New Post above to generate smart labels.' };
       
       if (rawTags && typeof rawTags === 'string' && rawTags.includes(' | ')) {
         const parts = {};
@@ -131,7 +126,7 @@
       } else if (item.title) {
         parsed.summary = String(item.title);
       } else if (item.fid) {
-        parsed.summary = `Saved Asset Post (ID: ${item.fid})`;
+        parsed.summary = `Saved Asset Post Module Card (ID Code Reference: ${item.fid})`;
       }
 
       const matchString = (String(url) + " " + String(date) + " " + String(parsed.topic) + " " + String(parsed.details) + " " + String(parsed.summary)).toLowerCase();
@@ -139,7 +134,6 @@
       return { url, date, ...parsed, rawString: matchString };
     }
 
-    // STAGE 3: Build the UI Metrics Bar & Chart.js graph Canvas
     function setupFiltersAndAnalytics() {
       document.getElementById('totalCount').innerText = `Total Saved Items: ${rawDatabase.length}`;
       
@@ -158,11 +152,15 @@
       const ctx = document.getElementById('analyticsChart').getContext('2d');
       if (chartInstance) chartInstance.destroy();
       
+      // If no valid data records map yet, create a clean zero data layout state wrapper
+      const labels = Object.keys(counts).length ? Object.keys(counts) : ["Uncategorized"];
+      const chartData = Object.values(counts).length ? Object.values(counts) : [rawDatabase.length];
+
       chartInstance = new Chart(ctx, {
         type: 'bar',
         data: {
-          labels: Object.keys(counts),
-          datasets: [{ data: Object.values(counts), backgroundColor: '#0095f6' }]
+          labels: labels,
+          datasets: [{ data: chartData, backgroundColor: '#0095f6' }]
         },
         options: { 
           indexAxis: 'y', 
@@ -174,7 +172,6 @@
       });
     }
 
-    // STAGE 4: Stream and render layout post card modules inside view grid container
     function renderFeed() {
       const query = document.getElementById('searchBox').value.toLowerCase();
       const filter = document.getElementById('categoryFilter').value;
@@ -215,7 +212,7 @@
       const targetUrl = urlInput.value.trim();
 
       if (!targetUrl.includes('instagram.com')) {
-        status.innerHTML = '<span style="color:red">❌ Invalid link.</span>';
+        status.innerHTML = '<span style="color:red">❌ Invalid link string format.</span>';
         return;
       }
 
@@ -239,4 +236,4 @@
           btn.disabled = false;
         }
       } catch (err) {
-        
+      
