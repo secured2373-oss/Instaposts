@@ -50,26 +50,16 @@
     let rawDatabase = [];
     let chartInstance = null;
 
-        async function loadDatabase() {
+    async function loadDatabase() {
       try {
         const res = await fetch('saved_posts.json?nocache=' + Date.now());
         const data = await res.json();
         
-        // THIS TEST CODE WILL SHOW WHAT IS INSIDE YOUR FILE
-        alert("Root Keys Found: " + Object.keys(data).join(", "));
-        if (typeof data === 'object') {
-          const firstKey = Object.keys(data)[0];
-          if (Array.isArray(data[firstKey])) {
-            alert("First item keys: " + Object.keys(data[firstKey][0] || {}).join(", "));
-            alert("Sample Item: " + JSON.stringify(data[firstKey][0]));
-          } else if (Array.isArray(data)) {
-            alert("First array item keys: " + Object.keys(data[0] || {}).join(", "));
-          }
-        }
-
+        // Correctly handle root wrappers or flat arrays depending on how Meta packaged it
         if (!Array.isArray(data) && typeof data === 'object') {
-          const rootKeys = Object.keys(data);
-          rawDatabase = data[rootKeys[0]] || [];
+          // If the data itself contains target list items, target it, else parse the object values
+          const targetKey = Object.keys(data).find(k => Array.isArray(data[k]));
+          rawDatabase = targetKey ? data[targetKey] : (data.saved_saved_media || data.saved_posts || Object.values(data));
         } else {
           rawDatabase = data || [];
         }
@@ -79,26 +69,35 @@
       } catch (err) {
         console.error("Database reading error:", err);
       }
-        }
-    
+    }
 
-    // Helper to safely extract URL, Timestamp, and Tags from ANY file structure variant
+    // Helper engineered to unpack your exact keys: timestamp, media, fid
     function extractItemData(item) {
-      let url = item.url || item.uri || "";
-      let date = item.date || item.string_date_time || "Unknown Date";
+      let url = "";
+      let date = "Unknown Date";
       let rawTags = item.tags || item.AI_Semantic_Tags || "";
 
-      // Look into Meta's deeply nested map configurations if keys are missing
-      const mediaData = item.string_map_data || item.media_list_data || {};
-      
-      if (!url) {
-        url = mediaData.Link?.value || mediaData.href?.value || "";
-      }
-      if (date === "Unknown Date") {
-        date = mediaData.Time?.value || "Unknown Date";
+      // 1. Process Date from the timestamp key you discovered
+      if (item.timestamp) {
+        // Convert UNIX epoch numbers or string log tags cleanly
+        date = isNaN(item.timestamp) ? item.timestamp : new Date(item.timestamp * 1000).toLocaleDateString();
+      } else if (item.string_date_time) {
+        date = item.string_date_time;
       }
 
-      // If the post has not gone through the AI pipeline yet, handle fallback tags
+      // 2. Process Instagram URL out of your discovered 'media' key loop
+      if (typeof item.media === 'string') {
+        url = item.media;
+      } else if (item.media && typeof item.media === 'object') {
+        url = item.media.uri || item.media.url || item.media.href || "";
+      }
+      
+      // Fallbacks if nested inside a generic alternative variable key loop
+      if (!url) {
+        url = item.url || item.uri || item.href || "";
+      }
+
+      // 3. Unpack your artificial intelligence parsing layout fields
       let parsed = { topic: 'Uncategorized', details: 'None', summary: 'Click Sync New Post above to generate smart tags.' };
       
       if (rawTags && rawTags.includes(' | ')) {
@@ -112,12 +111,17 @@
           details: parts.details || 'None', 
           summary: parts.summary || 'Processed successfully.' 
         };
-      } else if (item.title) {
-        // Fallback search term string from raw files
-        parsed.summary = item.title;
+      } else if (item.title || item.fid) {
+        // Use your discovered alternative ID identifiers as a basic search tag index string fallback
+        parsed.summary = item.title || `Post ID: ${item.fid}`;
       }
 
-      return { url, date, ...parsed, rawString: (url + " " + date + " " + parsed.topic + " " + parsed.details + " " + parsed.summary).toLowerCase() };
+      return { 
+        url, 
+        date, 
+        ...parsed, 
+        rawString: (url + " " + date + " " + parsed.topic + " " + parsed.details + " " + parsed.summary).toLowerCase() 
+      };
     }
 
     function setupFiltersAndAnalytics() {
@@ -153,7 +157,6 @@
       const container = document.getElementById('feedContainer');
       container.innerHTML = '';
 
-      // Reverse list to show newest items first
       const itemsToRender = [...rawDatabase].reverse();
       let matchesCount = 0;
 
@@ -168,7 +171,7 @@
             <div class="card">
               <span class="badge">${info.topic}</span>
               <p class="meta-item"><strong>📅 Date Logged:</strong> ${info.date}</p>
-              <p class="meta-item"><strong>📦 Extracted Elements:</strong> <em>${info.details}</em></p>
+              ${info.details !== 'None' ? `<p class="meta-item"><strong>📦 Extracted Elements:</strong> <em>${info.details}</em></p>` : ''}
               <p class="meta-item"><strong>📝 AI Summary:</strong> ${info.summary}</p>
               <hr>
               <button onclick="window.open('${info.url}', '_blank')">Open Original Link ↗️</button>
