@@ -52,7 +52,8 @@
 
     async function loadDatabase() {
       try {
-        const res = await fetch('my_instagram_links_vault.json?nocache=' + Date.now());
+        const res = await fetch('saved_posts.json?nocache=' + Date.now());
+      
         rawDatabase = await res.json();
         setupFiltersAndAnalytics();
         renderFeed();
