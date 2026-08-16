@@ -2,7 +2,7 @@
   "name": "instagram-ai-vault",
   "version": "1.0.0",
   "dependencies": {
-    "@google/genai": "^0.1.2",
+    "@google/genai": "^2.0.0",
     "@octokit/rest": "^21.0.0"
   }
 }
