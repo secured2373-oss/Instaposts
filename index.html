@@ -24,6 +24,7 @@
   <div class="container">
     <h1>🔍 InstaSave AI Netlify Search Vault</h1>
     
+    <!-- Sync New Link Section -->
     <div class="card">
       <h3>📥 Sync New Instagram Post</h3>
       <input type="text" id="newUrl" placeholder="Paste instagram.com URL here...">
@@ -31,18 +32,21 @@
       <div id="syncStatus" style="margin-top:10px; font-size:13px;"></div>
     </div>
 
+    <!-- Analytics Metrics Container -->
     <div class="card">
       <h3>📊 Your Collection Insights</h3>
       <p id="totalCount" style="font-size: 15px; font-weight: bold; margin: 5px 0;">Total Saved: Loading...</p>
       <div class="chart-container"><canvas id="analyticsChart"></canvas></div>
     </div>
 
+    <!-- Controls Filter Options Container -->
     <div class="card">
       <h3>🎛️ Search & Refine Options</h3>
       <input type="text" id="searchBox" oninput="renderFeed()" placeholder="Type to search captions, topics, ingredients...">
       <select id="categoryFilter" onchange="renderFeed()"><option value="All">All Categories</option></select>
     </div>
 
+    <!-- Output Stream Feed -->
     <div id="feedContainer"></div>
   </div>
 
@@ -55,66 +59,65 @@
         const res = await fetch('saved_posts.json?nocache=' + Date.now());
         const data = await res.json();
         
-        // Unpack structural array layouts flexibly
+        // STAGE 1: Safely unpack the inner array list no matter how Meta wrapped it
         if (Array.isArray(data)) {
           rawDatabase = data;
         } else if (typeof data === 'object' && data !== null) {
           const keys = Object.keys(data);
-          const activeKey = keys.find(k => Array.isArray(data[k]));
-          rawDatabase = activeKey ? data[activeKey] : Object.values(data);
+          // Look for an item that holds an array (like saved_saved_media)
+          const nestedArrayKey = keys.find(k => Array.isArray(data[k]));
+          if (nestedArrayKey) {
+            rawDatabase = data[nestedArrayKey];
+          } else {
+            // Fallback: Use raw object items list directly
+            rawDatabase = Object.values(data);
+          }
         } else {
           rawDatabase = [];
         }
         
+        // Force basic filtering to remove invalid objects before proceeding
+        rawDatabase = rawDatabase.filter(item => item && (item.timestamp || item.fid || item.media));
+
         setupFiltersAndAnalytics();
         renderFeed();
       } catch (err) {
-        console.error("Database loading exception tracker:", err);
-        document.getElementById('totalCount').innerText = "Error opening spreadsheet data array.";
+        console.error("Critical loading log breakdown tracker:", err);
+        document.getElementById('totalCount').innerText = "❌ Error processing data array payload.";
       }
     }
 
-    // Specially engineered to extract fields out of: timestamp, media, fid arrays
+    // STAGE 2: Deep variable extractor mapped around timestamp, media, fid structures
     function extractItemData(item) {
       let url = "";
       let date = "Unknown Date";
       let rawTags = item.tags || item.AI_Semantic_Tags || "";
 
-      // 1. Unpack Date using your discovered timestamp variable
+      // Check timestamp field safely
       if (item.timestamp) {
         if (!isNaN(item.timestamp)) {
-          // Fix for UNIX numeric epoch dates
-          const seconds = Number(item.timestamp);
-          date = new Date(seconds * 1000).toLocaleDateString();
+          date = new Date(Number(item.timestamp) * 1000).toLocaleDateString();
         } else {
           date = String(item.timestamp);
         }
       }
 
-      // 2. RECONSTRUCT INSTAGRAM LINK STRINGS DIRECTLY FROM ID CODES
-      // If the URL string is hidden or encapsulated inside item.media, we use the raw IDs to build it.
+      // Reconstruct direct interactive URL strings using your unique 'fid' tags
       if (item.fid) {
         url = `https://instagram.com{item.fid}/`;
       } else if (item.media && typeof item.media === 'object') {
-        const fallbackId = item.media.id || item.media.fid;
-        if (fallbackId) {
-          url = `https://instagram.com{fallbackId}/`;
-        } else {
-          url = item.media.uri || item.media.url || item.media.href || "";
-        }
-      } else if (typeof item.media === 'string' && item.media.startsWith('http')) {
+        const deepId = item.media.id || item.media.fid || item.media.uri;
+        url = (deepId && !deepId.startsWith('http')) ? `https://instagram.com{deepId}/` : (deepId || "");
+      } else if (typeof item.media === 'string') {
         url = item.media;
       }
 
-      // Final backup url parsing checkpoints
-      if (!url) {
-        url = item.url || item.uri || item.href || "https://instagram.com";
-      }
+      if (!url) url = "https://instagram.com";
 
-      // 3. Fallback tracking layout descriptive profiles
-      let parsed = { topic: 'Uncategorized', details: 'None', summary: 'Click Sync New Post to generate descriptive tags.' };
+      // Process artificial intelligence parsing tags safely
+      let parsed = { topic: 'Uncategorized', details: 'None', summary: 'Click Sync New Post above to generate smart semantic labels.' };
       
-      if (rawTags && rawTags.includes(' | ')) {
+      if (rawTags && typeof rawTags === 'string' && rawTags.includes(' | ')) {
         const parts = {};
         rawTags.split(' | ').forEach(pt => {
           const [key, val] = pt.split(': ');
@@ -123,26 +126,24 @@
         parsed = { 
           topic: parts.topic || 'Uncategorized', 
           details: parts.details || 'None', 
-          summary: parts.summary || 'AI Tagging Active.' 
+          summary: parts.summary || 'AI Synced.' 
         };
       } else if (item.title) {
-        parsed.summary = item.title;
+        parsed.summary = String(item.title);
       } else if (item.fid) {
-        parsed.summary = `Saved Media Asset Link (ID Reference Code: ${item.fid})`;
+        parsed.summary = `Saved Asset Post (ID: ${item.fid})`;
       }
 
-      return { 
-        url, 
-        date, 
-        ...parsed, 
-        rawString: (String(url) + " " + String(date) + " " + String(parsed.topic) + " " + String(parsed.details) + " " + String(parsed.summary)).toLowerCase() 
-      };
+      const matchString = (String(url) + " " + String(date) + " " + String(parsed.topic) + " " + String(parsed.details) + " " + String(parsed.summary)).toLowerCase();
+
+      return { url, date, ...parsed, rawString: matchString };
     }
 
+    // STAGE 3: Build the UI Metrics Bar & Chart.js graph Canvas
     function setupFiltersAndAnalytics() {
       document.getElementById('totalCount').innerText = `Total Saved Items: ${rawDatabase.length}`;
-      const counts = {};
       
+      const counts = {};
       rawDatabase.forEach(item => {
         const info = extractItemData(item);
         counts[info.topic] = (counts[info.topic] || 0) + 1;
@@ -156,16 +157,24 @@
 
       const ctx = document.getElementById('analyticsChart').getContext('2d');
       if (chartInstance) chartInstance.destroy();
+      
       chartInstance = new Chart(ctx, {
         type: 'bar',
         data: {
           labels: Object.keys(counts),
           datasets: [{ data: Object.values(counts), backgroundColor: '#0095f6' }]
         },
-        options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } }
+        options: { 
+          indexAxis: 'y', 
+          responsive: true, 
+          maintainAspectRatio: false, 
+          plugins: { legend: { display: false } },
+          scales: { x: { beginAtZero: true, ticks: { precision: 0 } } }
+        }
       });
     }
 
+    // STAGE 4: Stream and render layout post card modules inside view grid container
     function renderFeed() {
       const query = document.getElementById('searchBox').value.toLowerCase();
       const filter = document.getElementById('categoryFilter').value;
@@ -186,7 +195,7 @@
             <div class="card">
               <span class="badge">${info.topic}</span>
               <p class="meta-item"><strong>📅 Date Logged:</strong> ${info.date}</p>
-              ${info.details !== 'None' ? `<p class="meta-item"><strong>📦 Extracted Elements:</strong> <em>${info.details}</em></p>` : ''}
+              ${info.details !== 'None' ? `<p class="meta-item"><strong>📦 Extracted Details:</strong> <em>${info.details}</em></p>` : ''}
               <p class="meta-item"><strong>📝 Description:</strong> ${info.summary}</p>
               <hr>
               <button onclick="window.open('${info.url}', '_blank')">Open Original Link ↗️</button>
@@ -206,7 +215,7 @@
       const targetUrl = urlInput.value.trim();
 
       if (!targetUrl.includes('instagram.com')) {
-        status.innerHTML = '<span style="color:red">❌ Invalid address link.</span>';
+        status.innerHTML = '<span style="color:red">❌ Invalid link.</span>';
         return;
       }
 
@@ -230,12 +239,4 @@
           btn.disabled = false;
         }
       } catch (err) {
-        status.innerHTML = `<span style="color:red">❌ Network Error: ${err.message}</span>`;
-        btn.disabled = false;
-      }
-    }
-
-    window.onload = loadDatabase;
-  </script>
-</body>
-</html>
+        
