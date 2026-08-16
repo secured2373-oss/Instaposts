@@ -47,7 +47,8 @@ export default async (req, context) => {
     const octokit = new Octokit({ auth: process.env.MY_GITHUB_TOKEN });
     const owner = process.env.GITHUB_USER;
     const repo = process.env.GITHUB_REPO;
-    const path = 'my_instagram_links_vault.json';
+    const path = 'saved_posts.json';
+    
 
     let currentFile;
     let dbContent = [];
