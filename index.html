@@ -55,7 +55,7 @@
         const res = await fetch('saved_posts.json?nocache=' + Date.now());
         const data = await res.json();
         
-        // Flexibly locate arrays even if wrapped in outer structural dictionary elements
+        // Unpack structural array layouts flexibly
         if (Array.isArray(data)) {
           rawDatabase = data;
         } else if (typeof data === 'object' && data !== null) {
@@ -69,56 +69,50 @@
         setupFiltersAndAnalytics();
         renderFeed();
       } catch (err) {
-        console.error("Database reading failure logging:", err);
-        document.getElementById('totalCount').innerText = "Failed loading database array.";
+        console.error("Database loading exception tracker:", err);
+        document.getElementById('totalCount').innerText = "Error opening spreadsheet data array.";
       }
     }
 
-    // Advanced unified data extractor explicitly structured around (timestamp, media, fid) configurations
+    // Specially engineered to extract fields out of: timestamp, media, fid arrays
     function extractItemData(item) {
       let url = "";
       let date = "Unknown Date";
       let rawTags = item.tags || item.AI_Semantic_Tags || "";
 
-      // 1. Process Date cleanly out of raw numbers or string parameters
+      // 1. Unpack Date using your discovered timestamp variable
       if (item.timestamp) {
         if (!isNaN(item.timestamp)) {
-          // Converts standard UNIX epoch time configurations safely
-          const s = Number(item.timestamp);
-          date = new Date(s * 1000).toLocaleDateString();
+          // Fix for UNIX numeric epoch dates
+          const seconds = Number(item.timestamp);
+          date = new Date(seconds * 1000).toLocaleDateString();
         } else {
           date = String(item.timestamp);
         }
-      } else if (item.string_date_time) {
-        date = item.string_date_time;
       }
 
-      // 2. Deep trace values mapping the exact "media" sub-structures out of raw entries
-      if (item.media) {
-        if (typeof item.media === 'string') {
-          url = item.media;
-        } else if (typeof item.media === 'object' && item.media !== null) {
-          url = item.media.uri || item.media.url || item.media.href || "";
-          
-          // Pull nested value mapping loops if nestled deeper into Meta map keys
-          if (!url && item.media.string_map_data) {
-            url = item.media.string_map_data.Link?.value || item.media.string_map_data.href?.value || "";
-          }
-        }
-      }
-
-      // Complete catch-all baseline fallback layer if keys crawl elsewhere
-      if (!url) {
-        url = item.url || item.uri || item.href || "";
-      }
-      
-      // If a URL is STILL not found but 'fid' exists, map it to a working browser format link string
-      if (!url && item.fid) {
+      // 2. RECONSTRUCT INSTAGRAM LINK STRINGS DIRECTLY FROM ID CODES
+      // If the URL string is hidden or encapsulated inside item.media, we use the raw IDs to build it.
+      if (item.fid) {
         url = `https://instagram.com{item.fid}/`;
+      } else if (item.media && typeof item.media === 'object') {
+        const fallbackId = item.media.id || item.media.fid;
+        if (fallbackId) {
+          url = `https://instagram.com{fallbackId}/`;
+        } else {
+          url = item.media.uri || item.media.url || item.media.href || "";
+        }
+      } else if (typeof item.media === 'string' && item.media.startsWith('http')) {
+        url = item.media;
       }
 
-      // 3. Fallback tracking labels layout if items have not cleared the AI engine script pipeline yet
-      let parsed = { topic: 'Uncategorized', details: 'None', summary: 'Click Sync New Post above to update semantic index cards.' };
+      // Final backup url parsing checkpoints
+      if (!url) {
+        url = item.url || item.uri || item.href || "https://instagram.com";
+      }
+
+      // 3. Fallback tracking layout descriptive profiles
+      let parsed = { topic: 'Uncategorized', details: 'None', summary: 'Click Sync New Post to generate descriptive tags.' };
       
       if (rawTags && rawTags.includes(' | ')) {
         const parts = {};
@@ -129,12 +123,12 @@
         parsed = { 
           topic: parts.topic || 'Uncategorized', 
           details: parts.details || 'None', 
-          summary: parts.summary || 'AI Tagging Processed.' 
+          summary: parts.summary || 'AI Tagging Active.' 
         };
       } else if (item.title) {
         parsed.summary = item.title;
       } else if (item.fid) {
-        parsed.summary = `Saved Media Item Asset (ID Reference: ${item.fid})`;
+        parsed.summary = `Saved Media Asset Link (ID Reference Code: ${item.fid})`;
       }
 
       return { 
@@ -193,7 +187,7 @@
               <span class="badge">${info.topic}</span>
               <p class="meta-item"><strong>📅 Date Logged:</strong> ${info.date}</p>
               ${info.details !== 'None' ? `<p class="meta-item"><strong>📦 Extracted Elements:</strong> <em>${info.details}</em></p>` : ''}
-              <p class="meta-item"><strong>📝 Description Index:</strong> ${info.summary}</p>
+              <p class="meta-item"><strong>📝 Description:</strong> ${info.summary}</p>
               <hr>
               <button onclick="window.open('${info.url}', '_blank')">Open Original Link ↗️</button>
             </div>`;
@@ -242,4 +236,6 @@
     }
 
     window.onload = loadDatabase;
-    
+  </script>
+</body>
+</html>
