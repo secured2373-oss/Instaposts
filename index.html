@@ -55,50 +55,70 @@
         const res = await fetch('saved_posts.json?nocache=' + Date.now());
         const data = await res.json();
         
-        // Correctly handle root wrappers or flat arrays depending on how Meta packaged it
-        if (!Array.isArray(data) && typeof data === 'object') {
-          // If the data itself contains target list items, target it, else parse the object values
-          const targetKey = Object.keys(data).find(k => Array.isArray(data[k]));
-          rawDatabase = targetKey ? data[targetKey] : (data.saved_saved_media || data.saved_posts || Object.values(data));
+        // Flexibly locate arrays even if wrapped in outer structural dictionary elements
+        if (Array.isArray(data)) {
+          rawDatabase = data;
+        } else if (typeof data === 'object' && data !== null) {
+          const keys = Object.keys(data);
+          const activeKey = keys.find(k => Array.isArray(data[k]));
+          rawDatabase = activeKey ? data[activeKey] : Object.values(data);
         } else {
-          rawDatabase = data || [];
+          rawDatabase = [];
         }
         
         setupFiltersAndAnalytics();
         renderFeed();
       } catch (err) {
-        console.error("Database reading error:", err);
+        console.error("Database reading failure logging:", err);
+        document.getElementById('totalCount').innerText = "Failed loading database array.";
       }
     }
 
-    // Helper engineered to unpack your exact keys: timestamp, media, fid
+    // Advanced unified data extractor explicitly structured around (timestamp, media, fid) configurations
     function extractItemData(item) {
       let url = "";
       let date = "Unknown Date";
       let rawTags = item.tags || item.AI_Semantic_Tags || "";
 
-      // 1. Process Date from the timestamp key you discovered
+      // 1. Process Date cleanly out of raw numbers or string parameters
       if (item.timestamp) {
-        // Convert UNIX epoch numbers or string log tags cleanly
-        date = isNaN(item.timestamp) ? item.timestamp : new Date(item.timestamp * 1000).toLocaleDateString();
+        if (!isNaN(item.timestamp)) {
+          // Converts standard UNIX epoch time configurations safely
+          const s = Number(item.timestamp);
+          date = new Date(s * 1000).toLocaleDateString();
+        } else {
+          date = String(item.timestamp);
+        }
       } else if (item.string_date_time) {
         date = item.string_date_time;
       }
 
-      // 2. Process Instagram URL out of your discovered 'media' key loop
-      if (typeof item.media === 'string') {
-        url = item.media;
-      } else if (item.media && typeof item.media === 'object') {
-        url = item.media.uri || item.media.url || item.media.href || "";
+      // 2. Deep trace values mapping the exact "media" sub-structures out of raw entries
+      if (item.media) {
+        if (typeof item.media === 'string') {
+          url = item.media;
+        } else if (typeof item.media === 'object' && item.media !== null) {
+          url = item.media.uri || item.media.url || item.media.href || "";
+          
+          // Pull nested value mapping loops if nestled deeper into Meta map keys
+          if (!url && item.media.string_map_data) {
+            url = item.media.string_map_data.Link?.value || item.media.string_map_data.href?.value || "";
+          }
+        }
       }
-      
-      // Fallbacks if nested inside a generic alternative variable key loop
+
+      // Complete catch-all baseline fallback layer if keys crawl elsewhere
       if (!url) {
         url = item.url || item.uri || item.href || "";
       }
+      
+      // If a URL is STILL not found but 'fid' exists, map it to a working browser format link string
+      if (!url && item.fid) {
+        url = `https://instagram.com{item.fid}/`;
+      }
 
-      // 3. Unpack your artificial intelligence parsing layout fields
-      let parsed = { topic: 'Uncategorized', details: 'None', summary: 'Click Sync New Post above to generate smart tags.' };
+      // 3. Fallback tracking labels layout if items have not cleared the AI engine script pipeline yet
+      let parsed = { topic: 'Uncategorized', details: 'None', summary: 'Click Sync New Post above to update semantic index cards.' };
       
       if (rawTags && rawTags.includes(' | ')) {
         const parts = {};
@@ -107,20 +127,21 @@
           if (key && val) parts[key.trim().toLowerCase()] = val.trim();
         });
         parsed = { 
-          topic: parts.topic || 'General', 
+          topic: parts.topic || 'Uncategorized', 
           details: parts.details || 'None', 
-          summary: parts.summary || 'Processed successfully.' 
+          summary: parts.summary || 'AI Tagging Processed.' 
         };
-      } else if (item.title || item.fid) {
-        // Use your discovered alternative ID identifiers as a basic search tag index string fallback
-        parsed.summary = item.title || `Post ID: ${item.fid}`;
+      } else if (item.title) {
+        parsed.summary = item.title;
+      } else if (item.fid) {
+        parsed.summary = `Saved Media Item Asset (ID Reference: ${item.fid})`;
       }
 
       return { 
         url, 
         date, 
         ...parsed, 
-        rawString: (url + " " + date + " " + parsed.topic + " " + parsed.details + " " + parsed.summary).toLowerCase() 
+        rawString: (String(url) + " " + String(date) + " " + String(parsed.topic) + " " + String(parsed.details) + " " + String(parsed.summary)).toLowerCase() 
       };
     }
 
@@ -172,7 +193,7 @@
               <span class="badge">${info.topic}</span>
               <p class="meta-item"><strong>📅 Date Logged:</strong> ${info.date}</p>
               ${info.details !== 'None' ? `<p class="meta-item"><strong>📦 Extracted Elements:</strong> <em>${info.details}</em></p>` : ''}
-              <p class="meta-item"><strong>📝 AI Summary:</strong> ${info.summary}</p>
+              <p class="meta-item"><strong>📝 Description Index:</strong> ${info.summary}</p>
               <hr>
               <button onclick="window.open('${info.url}', '_blank')">Open Original Link ↗️</button>
             </div>`;
@@ -207,7 +228,7 @@
         const result = await response.json();
 
         if (result.success) {
-          status.innerHTML = '<span style="color:green">🎉 Saved! Reloading engine...</span>';
+          status.innerHTML = '<span style="color:green">🎉 Saved! Updating repository...</span>';
           urlInput.value = '';
           setTimeout(() => { location.reload(); }, 1500);
         } else {
@@ -221,6 +242,4 @@
     }
 
     window.onload = loadDatabase;
-  </script>
-</body>
-</html>
+    
